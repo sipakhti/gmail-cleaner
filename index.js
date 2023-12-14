@@ -6,18 +6,21 @@ const process = require('process');
 const {authenticate} = require('@google-cloud/local-auth');
 const {google} = require('googleapis');
 
-
+// instantiate the readline readline interface
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     autoCommit: true // otherwise ill have to call .commit()
   });
+
+// a simple promise that allows the execution to pause in an async function
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 let gmailClient = null;
 let savedata = null
 let isSaving = false;
 let isReady = false;
+
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -27,6 +30,10 @@ const TOKEN_PATH = path.join(process.cwd(), 'token.json');
 const CREDENTIALS_PATH = path.join(process.cwd(), 'Credentials.json');
 const SAVEFILE_PATH = path.join(process.cwd(), 'savefile.json')
 
+
+/**
+ * @returns {Promise<void>}
+ */
 async function loadSaveFile(){
     try {
         isReady = false;
@@ -39,12 +46,14 @@ async function loadSaveFile(){
         if (savedata === null) savedata = {
             totalEmails: 0
         }
+        isReady = true;
     }
 }
 
+
+
 async function dumpSaveFile() {
-    while (true){
-        if (!isSaving) break;
+    while (isSaving){ // make sure that there is no race condition during save
         pause(5000);
     }
     isSaving = true;
@@ -63,7 +72,7 @@ async function loadSavedCredentialsIfExist() {
   try {
     const content = await fs.readFile(TOKEN_PATH);
     const credentials = JSON.parse(content);
-    return google.auth.fromJSON(credentials);
+    return google.auth.fromJSON(credentials); // creates an authorized client using saved Credentials
   } catch (err) {
     return null;
   }
@@ -97,7 +106,7 @@ async function authorize() {
   if (client) {
     return client;
   }
-  client = await authenticate({
+  client = await authenticate({ // starts the OAuth2 
     scopes: SCOPES,
     keyfilePath: CREDENTIALS_PATH,
   });
@@ -163,10 +172,11 @@ function extractSenderNameFromHeaders(headers){
  * 
  * @returns {Promise<Array<Message>>}
  */
-async function getMessages() {
+async function getMessageList() {
   let response = await gmailClient.users.messages.list({
     userId: 'me',
-    pageToken: savedata.nextPageToken
+    pageToken: savedata.nextPageToken,
+    maxResults: 100
   })  
 
   let messages = response.data.messages;
@@ -193,7 +203,7 @@ async function getMessage(messageId) {
 
 async function listMessages() {
     
-    let messages = await getMessages();
+    let messages = await getMessageList();
 
 
     for (let index = 0; index < messages.length; index++) {
@@ -224,7 +234,7 @@ async function listMessages() {
 
         if (index === messages.length - 1){ // true on last index
             index = 0; // resets the loop
-            messages = await  getMessages();
+            messages = await  getMessageList();
             dumpSaveFile();
 
         }
