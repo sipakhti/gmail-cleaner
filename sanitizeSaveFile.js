@@ -28,7 +28,7 @@ async function dumpSaveFile(saveData) {
  * @param {SaveFile} saveData 
  * @returns {SaveFile}
  */
-async function sanitizer(saveData) {
+function sanitizer(saveData) {
     let duplicates = 0;
     let totalEmails = 0;
     for (const prop in saveData) {
@@ -42,16 +42,18 @@ async function sanitizer(saveData) {
             saveData[senderName][senderEmail].messages = Array.from(tempSet);
             let afterSize = saveData[senderName][senderEmail].messages.length
             totalEmails += afterSize;
-            console.log(`Email: ${senderEmail} | original size: ${beforeSize} | new size: ${afterSize}`);
+            // console.debug(`Email: ${senderEmail} | original size: ${beforeSize} | new size: ${afterSize}`);
             duplicates+= beforeSize - afterSize;
             saveData[senderName][senderEmail].count = afterSize;
         }
     }
 
-    console.log(`TOTAL DUPLICATES FOUND: ${duplicates}`);
+    console.log(`TOTAL DUPLICATES FOUND: ${duplicates} | TOTAL EMAILS: ${saveData.totalEmails} | ACTUAL EMAILS: ${totalEmails}`);
     saveData.totalEmails = totalEmails;
 
     return saveData;
 }
 
-loadSaveFile(SAVEFILE_PATH).then(saveData => sanitizer(saveData).then(saveData => dumpSaveFile(saveData))).catch(e => console.log(e))
+// loadSaveFile(SAVEFILE_PATH).then(saveData => dumpSaveFile(sanitizer(saveData))).catch(e => console.log(e))
+
+module.exports.sanitizer = sanitizer

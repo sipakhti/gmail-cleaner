@@ -1,68 +1,65 @@
-const readline = require('readline');
-const fs = require('fs').promises;
-const fsSync = require('fs');
-const path = require('path');
-const process = require('process');
-const {authenticate} = require('@google-cloud/local-auth');
-const {google} = require('googleapis');
-
+const readline = require("readline");
+const fs = require("fs").promises;
+const fsSync = require("fs");
+const path = require("path");
+const process = require("process");
+const { authenticate } = require("@google-cloud/local-auth");
+const { google } = require("googleapis");
+const sanitize = require("./sanitizeSaveFile.js").sanitizer;
 // instantiate the readline readline interface
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    autoCommit: true // otherwise ill have to call .commit()
-  });
+  input: process.stdin,
+  output: process.stdout,
+  autoCommit: true, // otherwise ill have to call .commit()
+});
 
 // a simple promise that allows the execution to pause in an async function
-const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let gmailClient = null;
-let savedata = null
+let savedata = null;
 let isSaving = false;
 let isReady = false;
 
 // If modifying these scopes, delete token.json.
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 // The file token.json stores the user's access and refresh tokens, and is
 // created automatically when the authorization flow completes for the first
 // time.
-const TOKEN_PATH = path.join(process.cwd(), 'token.json');
-const CREDENTIALS_PATH = path.join(process.cwd(), 'Credentials.json');
-const SAVEFILE_PATH = path.join(process.cwd(), 'savefile.json')
-
+const TOKEN_PATH = path.join(process.cwd(), "token.json");
+const CREDENTIALS_PATH = path.join(process.cwd(), "Credentials.json");
+const SAVEFILE_PATH = path.join(process.cwd(), "savefile.json");
 
 /**
  * @returns {Promise<void>}
  */
-async function loadSaveFile(){
-    try {
-        isReady = false;
-        const content = await fs.readFile(SAVEFILE_PATH);
-        savedata = JSON.parse(content);
-        isReady = true;
-        console.log(`LOADED: ${savedata.totalEmails} records`);
-    }
-    catch (e) {
-        if (savedata === null) savedata = {
-            totalEmails: 0,
-            nextPageToken: null
-        }
-        isReady = true;
-    }
+async function loadSaveFile() {
+  try {
+    isReady = false;
+    const content = await fs.readFile(SAVEFILE_PATH);
+    savedata = JSON.parse(content);
+    isReady = true;
+    console.log(`LOADED: ${savedata.totalEmails} records`);
+  } catch (e) {
+    if (savedata === null)
+      savedata = {
+        totalEmails: 0,
+        nextPageToken: null,
+      };
+    isReady = true;
+  }
 }
 
-
-
 async function dumpSaveFile() {
-    while (isSaving){ // make sure that there is no race condition during save
-        pause(5000);
-    }
-    isSaving = true;
-    console.log("SAVING...");
-    await fs.writeFile(SAVEFILE_PATH, JSON.stringify(savedata));
-    isSaving = false;
-    console.log(`SAVED ${savedata.totalEmails} records`)
-    
+  while (isSaving) {
+    // make sure that there is no race condition during save
+    pause(5000);
+  }
+  isSaving = true;
+  console.log("SAVING...");
+  await fs.writeFile(SAVEFILE_PATH, JSON.stringify(savedata));
+  isSaving = false;
+  console.log(`SAVED ${savedata.totalEmails} records`);
 }
 /**
  * Reads previously authorized credentials from the save file.
@@ -90,7 +87,7 @@ async function saveCredentials(client) {
   const keys = JSON.parse(content);
   const key = keys.installed || keys.web;
   const payload = JSON.stringify({
-    type: 'authorized_user',
+    type: "authorized_user",
     client_id: key.client_id,
     client_secret: key.client_secret,
     refresh_token: client.credentials.refresh_token,
@@ -107,7 +104,8 @@ async function authorize() {
   if (client) {
     return client;
   }
-  client = await authenticate({ // starts the OAuth2 
+  client = await authenticate({
+    // starts the OAuth2
     scopes: SCOPES,
     keyfilePath: CREDENTIALS_PATH,
   });
@@ -121,162 +119,152 @@ async function authorize() {
 /**
  * Lists the labels in the user's account.
  *
- * 
+ *
  */
 async function listLabels() {
   const res = await gmailClient.users.labels.list({
-    userId: 'me',
+    userId: "me",
   });
   const labels = res.data.labels;
   if (!labels || labels.length === 0) {
-    console.log('No labels found.');
+    console.log("No labels found.");
     return;
   }
-  console.log('Labels:');
+  console.log("Labels:");
   labels.forEach((label) => {
     console.log(`- ${label.name}`);
   });
 }
 
-
-
-
 /**
- * 
- * @param {Array<Header>} headers 
+ *
+ * @param {Array<Header>} headers
  * @returns {EmailSender} name and email
  */
-function extractSenderNameFromHeaders(headers){
+function extractSenderNameFromHeaders(headers) {
   let FromHeader = null;
-  
+
   // only breaks when it finds the desired header
   for (const header of headers) {
-    if (header.name.toLowerCase() === 'from') FromHeader = header
-    else continue
+    if (header.name.toLowerCase() === "from") FromHeader = header;
+    else continue;
     break;
   }
 
   // demo header {name: 'placeholder-string', value: 'somename <some@email.com>'}
   let value = FromHeader.value; //extract the value of the header
-  let splitValue = value.split(' '); // splits the value into array for easy manipulation
-  let name = splitValue.length > 2 ? value.split('<')[0].trimEnd() : splitValue[0]; // if the name is more than one word
-  let email = splitValue[splitValue.length - 1].substring(1,splitValue[splitValue.length - 1].length-1); // chooses the last index, and removes the first`<` and the last`>` char
+  let splitValue = value.split(" "); // splits the value into array for easy manipulation
+  let name =
+    splitValue.length > 2 ? value.split("<")[0].trimEnd() : splitValue[0]; // if the name is more than one word
+  let email = splitValue[splitValue.length - 1].substring(
+    1,
+    splitValue[splitValue.length - 1].length - 1
+  ); // chooses the last index, and removes the first`<` and the last`>` char
 
-  return {name,email};
-
+  return { name, email };
 }
 
-
-
-
 /**
- * 
+ *
  * @returns {Promise<Array<Message>>}
  */
 async function getMessageList() {
   let response = await gmailClient.users.messages.list({
-    userId: 'me',
+    userId: "me",
     pageToken: savedata.nextPageToken,
-    maxResults: 100
-  })  
+    maxResults: 100,
+  });
 
   let messages = response.data.messages;
   savedata.nextPageToken = response.data.nextPageToken;
 
   return messages;
-
 }
 
-
 /**
- * 
- * @param {string} messageId 
+ *
+ * @param {string} messageId
  * @returns {Promise<MessageDetail>}
  */
 async function getMessage(messageId) {
-  const response = await gmailClient.users.messages.get({id: messageId, userId: 'me',format: 'METADATA', metadataHeaders: ['from']});
+  const response = await gmailClient.users.messages.get({
+    id: messageId,
+    userId: "me",
+    format: "METADATA",
+    metadataHeaders: ["from"],
+  });
 
   let headers = response.data.payload.headers;
 
-  return {headers}
+  return { headers };
 }
-
-
 
 async function listMessages() {
-    
-  if (savedata.nextPageToken === undefined){
+  if (savedata.nextPageToken === undefined) {
     console.log(`ALL EMAILS ALREADY SCANNED. (${savedata.totalEmails})`);
     return;
-
   }
-    let messages = await getMessageList();
-    
-    for (let index = 0; index < messages.length; index++) {
-      
-  
-        try {
-        const messageId = messages[index].id;
-        const {headers} = await getMessage(messageId);
-        
-        const {name: senderName,email: senderEmail}  = extractSenderNameFromHeaders(headers);
-        
+  let messages = await getMessageList();
 
-        if (!(savedata[senderName])){
-            savedata[senderName] = {}
+  for (let index = 0; index < messages.length; index++) {
+    try {
+      const messageId = messages[index].id;
+      const { headers } = await getMessage(messageId);
+
+      const { name: senderName, email: senderEmail } =
+        extractSenderNameFromHeaders(headers);
+
+      if (!savedata[senderName]) {
+        savedata[senderName] = {};
+      }
+      if (savedata[senderName][senderEmail]) {
+        savedata[senderName][senderEmail].count++;
+        savedata[senderName][senderEmail].messages.push(messageId);
+      } else {
+        savedata[senderName][senderEmail] = {};
+        savedata[senderName][senderEmail].count = 1;
+        savedata[senderName][senderEmail].messages = [messageId];
+      }
+
+      console.log(`PROCESSED: ${++savedata.totalEmails} ${senderEmail}`);
+      readline.moveCursor(process.stdout, -40, -1);
+
+      if (index === messages.length - 1) {
+        // true on last index
+        index = 0; // resets the loop
+        if (savedata.nextPageToken === undefined) {
+          console.log(`ALL EMAILS SCANNED. (${savedata.totalEmails})`);
+          break;
         }
-        if (savedata[senderName][senderEmail]){
-            savedata[senderName][senderEmail].count++
-            savedata[senderName][senderEmail].messages.push(messageId);
-        }
-        else {
-            savedata[senderName][senderEmail] = {}
-            savedata[senderName][senderEmail].count = 1
-            savedata[senderName][senderEmail].messages = [messageId]
-        }
-
-
-        console.log(`PROCESSED: ${++savedata.totalEmails} ${senderEmail}`)
-        readline.moveCursor(process.stdout, -40, -1);
-
-
-        if (index === messages.length - 1){ // true on last index
-            index = 0; // resets the loop
-            if (savedata.nextPageToken === undefined){
-              console.log(`ALL EMAILS SCANNED. (${savedata.totalEmails})`);
-              break;
-
-            }
-            messages = await  getMessageList();
-            dumpSaveFile();
-
-        }
-
+        messages = await getMessageList();
+        savedata = sanitize(savedata);
+        await dumpSaveFile();
+      }
+    } catch (e) {
+      console.log(e);
+      return;
     }
-    catch (e) {
-        console.log(e);
-        return;
-    }
-
-        
-        
-    }
+  }
 }
 
-
 /**
- * 
- * @param {OAuth2Client} auth authorized OAuth client 
+ *
+ * @param {OAuth2Client} auth authorized OAuth client
  */
 function initGmail(auth) {
-    gmailClient = google.gmail({version: 'v1', auth});
-} 
+  gmailClient = google.gmail({ version: "v1", auth });
+}
 
-
-
-
-authorize().then(async (auth)=>{
-    initGmail(auth)
-    await loadSaveFile()
+authorize()
+  .then(async (auth) => {
+    initGmail(auth);
+    await loadSaveFile();
     listMessages();
-}).catch(console.error);
+  })
+  .catch(console.error)
+  // .finally(
+  //   sanitize(savedata).then((sanitizedData) => {
+  //     savedata = sanitizedData;
+  //     dumpSaveFile();
+  //   })
+  // );
