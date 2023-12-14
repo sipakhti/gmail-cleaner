@@ -44,7 +44,8 @@ async function loadSaveFile(){
     }
     catch (e) {
         if (savedata === null) savedata = {
-            totalEmails: 0
+            totalEmails: 0,
+            nextPageToken: null
         }
         isReady = true;
     }
@@ -201,12 +202,19 @@ async function getMessage(messageId) {
 }
 
 
+
 async function listMessages() {
     
+  if (savedata.nextPageToken === undefined){
+    console.log(`ALL EMAILS ALREADY SCANNED. (${savedata.totalEmails})`);
+    return;
+
+  }
     let messages = await getMessageList();
-
-
+    
     for (let index = 0; index < messages.length; index++) {
+      
+  
         try {
         const messageId = messages[index].id;
         const {headers} = await getMessage(messageId);
@@ -228,12 +236,17 @@ async function listMessages() {
         }
 
 
-        console.log(`PROCESSED: ${++savedata.totalEmails}`)
-        readline.moveCursor(process.stdout, -20, -1);
+        console.log(`PROCESSED: ${++savedata.totalEmails} ${senderEmail}`)
+        readline.moveCursor(process.stdout, -40, -1);
 
 
         if (index === messages.length - 1){ // true on last index
             index = 0; // resets the loop
+            if (savedata.nextPageToken === undefined){
+              console.log(`ALL EMAILS SCANNED. (${savedata.totalEmails})`);
+              break;
+
+            }
             messages = await  getMessageList();
             dumpSaveFile();
 
@@ -242,7 +255,7 @@ async function listMessages() {
     }
     catch (e) {
         console.log(e);
-        break;
+        return;
     }
 
         

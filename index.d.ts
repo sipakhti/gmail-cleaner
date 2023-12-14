@@ -16,3 +16,16 @@ type EmailSender = {
 type MessageDetail = {
     headers: Array<Header>
 }
+
+
+
+type SaveFile = {
+    totalEmails: Number,
+    nextPageToken: string,
+    name: {
+        email: {
+            count: Number,
+            messages: Array<String>
+        }
+    }
+}
