@@ -32,11 +32,12 @@ async function sanitizer() {
             TotalEmails += afterSize;
             console.log(`Email: ${senderEmail} | original size: ${beforeSize} | new size: ${afterSize}`);
             duplicates+= beforeSize - afterSize;
+            saveData[senderName][senderEmail].count = afterSize;
         }
     }
 
     console.log(`TOTAL DUPLICATES FOUND: ${duplicates}`);
-    saveData.TotalEmails = TotalEmails;
+    saveData.totalEmails = TotalEmails;
 }
 
 loadSaveFile().then(() => sanitizer().then(() => dumpSaveFile())).catch(e => console.log(e))
